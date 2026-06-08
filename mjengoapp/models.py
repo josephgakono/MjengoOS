@@ -86,3 +86,121 @@ class Job(models.Model):
 
     def __str__(self):
         return self.title
+
+class Quotation(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    )
+
+    worker = models.ForeignKey(
+        WorkerProfile,
+        on_delete=models.CASCADE
+    )
+
+    job = models.ForeignKey(
+        Job,
+        on_delete=models.CASCADE
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    estimated_days = models.PositiveIntegerField()
+
+    message = models.TextField()
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.worker.user.username} - {self.job.title}"
+
+
+class Project(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('paused', 'Paused'),
+    )
+
+    job = models.OneToOneField(
+        Job,
+        on_delete=models.CASCADE
+    )
+
+    worker = models.ForeignKey(
+        WorkerProfile,
+        on_delete=models.CASCADE
+    )
+
+    start_date = models.DateField()
+
+    expected_completion = models.DateField()
+
+    actual_completion = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
+    def __str__(self):
+        return self.job.title
+
+
+class ProgressUpdate(models.Model):
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE
+    )
+
+    description = models.TextField()
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return f"Update for {self.project.job.title}"
+
+
+class Review(models.Model):
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE
+    )
+
+    customer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE
+    )
+
+    worker = models.ForeignKey(
+        WorkerProfile,
+        on_delete=models.CASCADE
+    )
+
+    rating = models.IntegerField()
+
+    comment = models.TextField()
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return f"Review {self.rating}/5"
