@@ -11,6 +11,7 @@ class WorkerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkerProfile
         fields = '__all__'
+        read_only_fields = ['user']
 
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
