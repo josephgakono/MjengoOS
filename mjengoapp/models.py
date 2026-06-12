@@ -12,6 +12,11 @@ class User(AbstractUser):
 
     user_type = models.CharField(max_length=20, choices=USER_TYPES)
     phone = models.CharField(max_length=15)
+    profile_picture = models.ImageField(
+        upload_to='profiles/',
+        null=True,
+        blank=True
+    )
 
     def __str__(self):
         return self.username
@@ -80,6 +85,11 @@ class Job(models.Model):
         max_length=20,
         choices=STATUS_CHOICES,
         default='open'
+    )
+    image = models.ImageField(
+        upload_to='jobs/',
+        null=True,
+        blank=True
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -169,6 +179,11 @@ class ProgressUpdate(models.Model):
     )
 
     description = models.TextField()
+    image = models.ImageField(
+        upload_to='progress_updates/',
+        null=True,
+        blank=True
+    )
 
     created_at = models.DateTimeField(
         auto_now_add=True
@@ -215,6 +230,11 @@ class Portfolio(models.Model):
     title = models.CharField(max_length=200)
 
     description = models.TextField()
+    image = models.ImageField(
+        upload_to='portfolio/',
+        null=True,
+        blank=True
+    )
 
     created_at = models.DateTimeField(
         auto_now_add=True
