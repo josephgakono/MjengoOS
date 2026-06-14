@@ -24,12 +24,14 @@ class JobSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
         fields = '__all__'
+        read_only_fields = ['customer']
 
 
 class QuotationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quotation
         fields = '__all__'
+        read_only_fields = ['worker']
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -48,18 +50,21 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = '__all__'
+        read_only_fields = ['customer']
 
 
 class PortfolioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Portfolio
         fields = '__all__'
+        read_only_fields = ['worker']
 
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = '__all__'
+        read_only_fields = ['sender']
 
 
 class NotificationSerializer(serializers.ModelSerializer):
