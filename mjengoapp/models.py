@@ -172,6 +172,70 @@ class Project(models.Model):
         return self.job.title
 
 
+class Payment(models.Model):
+    PAYMENT_TYPE_CHOICES = (
+        ('deposit', 'Deposit'),
+        ('milestone', 'Milestone'),
+        ('final', 'Final'),
+    )
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('successful', 'Successful'),
+        ('failed', 'Failed'),
+    )
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='payments'
+    )
+
+    customer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payments'
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    payment_type = models.CharField(
+        max_length=20,
+        choices=PAYMENT_TYPE_CHOICES
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
+    checkout_request_id = models.CharField(
+        max_length=100,
+        blank=True
+    )
+
+    mpesa_receipt_number = models.CharField(
+        max_length=100,
+        blank=True
+    )
+
+    transaction_date = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    phone_number = models.CharField(max_length=15)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.project.job.title} - {self.amount} ({self.status})"
+
+
 class ProgressUpdate(models.Model):
     project = models.ForeignKey(
         Project,
