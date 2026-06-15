@@ -266,6 +266,12 @@ class PaymentListCreateView(generics.ListCreateAPIView):
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_permissions(self):
+        # Business rule: only customers can create payment records; admins retain full access.
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), IsCustomer()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
         # Business rule: admins see all payments; customers see only payments for their projects.
         user = self.request.user
@@ -274,8 +280,14 @@ class PaymentListCreateView(generics.ListCreateAPIView):
         return Payment.objects.filter(project__job__customer=user)
 
     def perform_create(self, serializer):
-        # Business rule: clients cannot spoof the payment customer.
-        serializer.save(customer=self.request.user)
+        project = serializer.validated_data['project']
+
+        # Business rule: workers cannot initiate payments and customers can only pay for their own projects.
+        if project.job.customer_id != self.request.user.id and not is_admin_user(self.request.user):
+            raise PermissionDenied('Only the project owner can create a payment for this project.')
+
+        customer = project.job.customer if is_admin_user(self.request.user) else self.request.user
+        serializer.save(customer=customer)
 
 
 class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -289,9 +301,18 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Payment.objects.all()
         return Payment.objects.filter(project__job__customer=user)
 
+    def check_object_permissions(self, request, obj):
+        super().check_object_permissions(request, obj)
+        if request.method in SAFE_METHODS:
+            return
+
+        # Business rule: payment records are immutable for customers after creation; admins manage exceptions.
+        if not is_admin_user(request.user):
+            raise PermissionDenied('Only admins can modify payment records.')
+
 
 class StkPushView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsCustomer]
 
     def post(self, request):
         serializer = StkPushSerializer(data=request.data)
@@ -302,10 +323,16 @@ class StkPushView(APIView):
         amount = serializer.validated_data['amount']
         payment_type = serializer.validated_data['payment_type']
 
+        # Business rule: workers cannot initiate payments; customers can only pay for projects they own.
+        if project.job.customer_id != request.user.id and not is_admin_user(request.user):
+            raise PermissionDenied('Only the project owner can initiate this payment.')
+
+        customer = project.job.customer if is_admin_user(request.user) else request.user
+
         # Create a pending local record before calling Daraja so the callback can reconcile the payment.
         payment = Payment.objects.create(
             project=project,
-            customer=request.user,
+            customer=customer,
             amount=amount,
             payment_type=payment_type,
             phone_number=phone_number,
