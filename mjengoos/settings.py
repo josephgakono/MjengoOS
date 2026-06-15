@@ -78,6 +78,13 @@ REST_FRAMEWORK = {
     ),
 }
 
+# Daraja credentials are loaded from the environment so secrets never live in source code.
+MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default='')
+MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default='')
+MPESA_SHORTCODE = config('MPESA_SHORTCODE', default='')
+MPESA_PASSKEY = config('MPESA_PASSKEY', default='')
+MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='')
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
