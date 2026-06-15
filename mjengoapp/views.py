@@ -7,6 +7,7 @@ from .models import (
     Job,
     Message,
     Notification,
+    Payment,
     Portfolio,
     ProgressUpdate,
     Project,
@@ -27,6 +28,7 @@ from .serializers import (
     JobSerializer,
     MessageSerializer,
     NotificationSerializer,
+    PaymentSerializer,
     PortfolioSerializer,
     ProgressUpdateSerializer,
     ProjectSerializer,
@@ -235,6 +237,34 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
         # Business rule: only admins can delete projects; participant edits are still scoped by queryset.
         if request.method == 'DELETE' and not is_admin_user(request.user):
             raise PermissionDenied('Only admins can delete projects.')
+
+
+class PaymentListCreateView(generics.ListCreateAPIView):
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Business rule: admins see all payments; customers see only payments for their projects.
+        user = self.request.user
+        if is_admin_user(user):
+            return Payment.objects.all()
+        return Payment.objects.filter(project__job__customer=user)
+
+    def perform_create(self, serializer):
+        # Business rule: clients cannot spoof the payment customer.
+        serializer.save(customer=self.request.user)
+
+
+class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Business rule: payment details are scoped to the project owner unless the requester is an admin.
+        user = self.request.user
+        if is_admin_user(user):
+            return Payment.objects.all()
+        return Payment.objects.filter(project__job__customer=user)
 
 
 class ProgressUpdateListCreateView(generics.ListCreateAPIView):

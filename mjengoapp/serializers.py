@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, WorkerProfile, CustomerProfile, Job, Quotation, Project, ProgressUpdate, Review, Portfolio, Message, Notification
+from .models import User, WorkerProfile, CustomerProfile, Job, Quotation, Project, Payment, ProgressUpdate, Review, Portfolio, Message, Notification
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -38,6 +38,20 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = '__all__'
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = '__all__'
+        read_only_fields = [
+            'customer',
+            'status',
+            'checkout_request_id',
+            'mpesa_receipt_number',
+            'transaction_date',
+            'created_at',
+        ]
 
 
 class ProgressUpdateSerializer(serializers.ModelSerializer):
