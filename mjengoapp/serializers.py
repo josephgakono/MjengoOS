@@ -54,6 +54,13 @@ class PaymentSerializer(serializers.ModelSerializer):
         ]
 
 
+class StkPushSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField()
+    phone_number = serializers.CharField(max_length=15)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=1)
+    payment_type = serializers.ChoiceField(choices=Payment.PAYMENT_TYPE_CHOICES)
+
+
 class ProgressUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProgressUpdate

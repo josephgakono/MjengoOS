@@ -1,7 +1,13 @@
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from rest_framework import generics
+from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.utils import timezone
+from datetime import datetime
 from .models import (
     CustomerProfile,
     Job,
@@ -15,6 +21,7 @@ from .models import (
     Review,
     WorkerProfile,
 )
+from .daraja_service import DarajaService, DarajaServiceError
 from .permissions import (
     IsCustomer,
     IsJobOwner,
@@ -34,6 +41,7 @@ from .serializers import (
     ProjectSerializer,
     QuotationSerializer,
     ReviewSerializer,
+    StkPushSerializer,
     WorkerProfileSerializer,
 )
 
@@ -43,6 +51,21 @@ SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
 
 def get_worker_profile(user):
     return WorkerProfile.objects.filter(user=user).first()
+
+
+def get_callback_item(metadata_items, item_name):
+    # Daraja callback metadata is a list of name/value pairs, so this helper safely extracts one value.
+    for item in metadata_items:
+        if item.get('Name') == item_name:
+            return item.get('Value')
+    return None
+
+
+def parse_mpesa_transaction_date(raw_transaction_date):
+    if not raw_transaction_date:
+        return None
+    parsed_date = datetime.strptime(str(raw_transaction_date), '%Y%m%d%H%M%S')
+    return timezone.make_aware(parsed_date, timezone.get_current_timezone())
 
 
 class JobListCreateView(generics.ListCreateAPIView):
@@ -265,6 +288,89 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
         if is_admin_user(user):
             return Payment.objects.all()
         return Payment.objects.filter(project__job__customer=user)
+
+
+class StkPushView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = StkPushSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        project = get_object_or_404(Project, pk=serializer.validated_data['project_id'])
+        phone_number = serializer.validated_data['phone_number']
+        amount = serializer.validated_data['amount']
+        payment_type = serializer.validated_data['payment_type']
+
+        # Create a pending local record before calling Daraja so the callback can reconcile the payment.
+        payment = Payment.objects.create(
+            project=project,
+            customer=request.user,
+            amount=amount,
+            payment_type=payment_type,
+            phone_number=phone_number,
+        )
+
+        try:
+            daraja_response = DarajaService.send_stk_push(
+                phone_number=phone_number,
+                amount=amount,
+                account_reference=f'PROJECT-{project.id}',
+                transaction_desc=f'{payment_type.title()} payment for {project.job.title}',
+            )
+        except DarajaServiceError as exc:
+            payment.status = 'failed'
+            payment.save(update_fields=['status'])
+            raise ValidationError({'daraja': str(exc)})
+
+        checkout_request_id = daraja_response.get('CheckoutRequestID', '')
+        if checkout_request_id:
+            payment.checkout_request_id = checkout_request_id
+            payment.save(update_fields=['checkout_request_id'])
+
+        response_data = PaymentSerializer(payment).data
+        response_data['daraja_response'] = daraja_response
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class MpesaCallbackView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        callback = request.data.get('Body', {}).get('stkCallback', {})
+        checkout_request_id = callback.get('CheckoutRequestID')
+        result_code = callback.get('ResultCode')
+
+        if not checkout_request_id:
+            return Response({'detail': 'CheckoutRequestID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        payment = Payment.objects.filter(checkout_request_id=checkout_request_id).first()
+        if payment is None:
+            return Response({'detail': 'Payment not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Daraja sends ResultCode 0 for a successful customer authorization.
+        if result_code == 0:
+            metadata_items = callback.get('CallbackMetadata', {}).get('Item', [])
+            payment.status = 'successful'
+            payment.mpesa_receipt_number = get_callback_item(metadata_items, 'MpesaReceiptNumber') or ''
+            payment.transaction_date = parse_mpesa_transaction_date(
+                get_callback_item(metadata_items, 'TransactionDate')
+            )
+            payment.phone_number = str(get_callback_item(metadata_items, 'PhoneNumber') or payment.phone_number)
+            payment.save(
+                update_fields=[
+                    'status',
+                    'mpesa_receipt_number',
+                    'transaction_date',
+                    'phone_number',
+                ]
+            )
+        else:
+            payment.status = 'failed'
+            payment.save(update_fields=['status'])
+
+        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
 class ProgressUpdateListCreateView(generics.ListCreateAPIView):
