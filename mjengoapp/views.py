@@ -668,3 +668,49 @@ class NotificationDetailView(generics.RetrieveUpdateDestroyAPIView):
         if is_admin_user(user):
             return Notification.objects.all()
         return Notification.objects.filter(user=user)
+
+
+class AcceptQuotationView(APIView):
+    permission_classes = [IsAuthenticated, IsCustomer]
+
+    def post(self, request, quotation_id):
+        quotation = get_object_or_404(
+            Quotation,
+            id=quotation_id
+        )
+
+        # Only the owner of the job can accept quotations
+        if quotation.job.customer_id != request.user.id:
+            raise PermissionDenied(
+                "Only the job owner can accept quotations."
+            )
+
+        # Prevent accepting twice
+        if quotation.status == "accepted":
+            return Response(
+                {"message": "Quotation already accepted."},
+                status=status.HTTP_200_OK
+            )
+
+        # Reject all other quotations for this job
+        Quotation.objects.filter(
+            job=quotation.job
+        ).exclude(
+            id=quotation.id
+        ).update(status="rejected")
+
+        # Accept selected quotation
+        quotation.status = "accepted"
+        quotation.save()
+
+        # Optional: update job status
+        quotation.job.status = "quoted"
+        quotation.job.save()
+
+        return Response(
+            {
+                "message": "Quotation accepted successfully.",
+                "quotation_id": quotation.id,
+            },
+            status=status.HTTP_200_OK,
+        )
