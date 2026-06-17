@@ -714,3 +714,26 @@ class AcceptQuotationView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+    
+
+class RejectQuotationView(APIView):
+    permission_classes = [IsAuthenticated, IsCustomer]
+
+    def post(self, request, quotation_id):
+        quotation = get_object_or_404(
+            Quotation,
+            id=quotation_id
+        )
+
+        if quotation.job.customer_id != request.user.id:
+            raise PermissionDenied(
+                "Only the job owner can reject quotations."
+            )
+
+        quotation.status = "rejected"
+        quotation.save()
+
+        return Response(
+            {"message": "Quotation rejected."},
+            status=status.HTTP_200_OK
+        )    
