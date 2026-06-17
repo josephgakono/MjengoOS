@@ -21,7 +21,7 @@ from .models import (
     Review,
     WorkerProfile,
 )
-from .daraja_service import DarajaService, DarajaServiceError
+from .mpesa import DarajaService, DarajaServiceError
 from .permissions import (
     IsCustomer,
     IsJobOwner,
@@ -306,7 +306,7 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
         if request.method in SAFE_METHODS:
             return
 
-        # Business rule: payment records are immutable for customers after creation; admins manage exceptions.
+        
         if not is_admin_user(request.user):
             raise PermissionDenied('Only admins can modify payment records.')
 
@@ -323,13 +323,12 @@ class StkPushView(APIView):
         amount = serializer.validated_data['amount']
         payment_type = serializer.validated_data['payment_type']
 
-        # Business rule: workers cannot initiate payments; customers can only pay for projects they own.
         if project.job.customer_id != request.user.id and not is_admin_user(request.user):
             raise PermissionDenied('Only the project owner can initiate this payment.')
 
         customer = project.job.customer if is_admin_user(request.user) else request.user
 
-        # Create a pending local record before calling Daraja so the callback can reconcile the payment.
+    
         payment = Payment.objects.create(
             project=project,
             customer=customer,
@@ -350,10 +349,28 @@ class StkPushView(APIView):
             payment.save(update_fields=['status'])
             raise ValidationError({'daraja': str(exc)})
 
-        checkout_request_id = daraja_response.get('CheckoutRequestID', '')
-        if checkout_request_id:
-            payment.checkout_request_id = checkout_request_id
-            payment.save(update_fields=['checkout_request_id'])
+        # Daraja may return the tracking id under different keys depending on API/SDK.
+        checkout_request_id = (
+            daraja_response.get('CheckoutRequestID')
+            or daraja_response.get('CheckoutRequestId')
+            or daraja_response.get('checkoutRequestID')
+            or ''
+        )
+        if not checkout_request_id:
+            # Keep payment row consistent but make it obvious in the response.
+            # (Callback will not be able to match without this.)
+            return Response(
+                {
+                    **PaymentSerializer(payment).data,
+                    'daraja_response': daraja_response,
+                    'error': 'Daraja did not return CheckoutRequestID (cannot match callback).',
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment.checkout_request_id = str(checkout_request_id)
+        payment.save(update_fields=['checkout_request_id'])
+
 
         response_data = PaymentSerializer(payment).data
         response_data['daraja_response'] = daraja_response
@@ -361,43 +378,84 @@ class StkPushView(APIView):
 
 
 class MpesaCallbackView(APIView):
+    # CRITICAL: Allow Safaricom's webhook to hit your server without a JWT token or session
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = [] 
 
-    def post(self, request):
-        callback = request.data.get('Body', {}).get('stkCallback', {})
-        checkout_request_id = callback.get('CheckoutRequestID')
-        result_code = callback.get('ResultCode')
+    def post(self, request, *args, **kwargs):
+        # 1. Grab the raw payload sent by M-Pesa
+        callback_data = request.data
+        
+        # 2. Safely extract core identifiers from the nested JSON
+        stk_callback = callback_data.get('Body', {}).get('stkCallback', {})
+        result_code = stk_callback.get('ResultCode')
+
+        # Callback tracking id might vary in key casing.
+        checkout_request_id = (
+            stk_callback.get('CheckoutRequestID')
+            or stk_callback.get('CheckoutRequestId')
+            or stk_callback.get('checkoutRequestID')
+            or None
+        )
 
         if not checkout_request_id:
-            return Response({'detail': 'CheckoutRequestID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        payment = Payment.objects.filter(checkout_request_id=checkout_request_id).first()
-        if payment is None:
-            return Response({'detail': 'Payment not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-        # Daraja sends ResultCode 0 for a successful customer authorization.
-        if result_code == 0:
-            metadata_items = callback.get('CallbackMetadata', {}).get('Item', [])
-            payment.status = 'successful'
-            payment.mpesa_receipt_number = get_callback_item(metadata_items, 'MpesaReceiptNumber') or ''
-            payment.transaction_date = parse_mpesa_transaction_date(
-                get_callback_item(metadata_items, 'TransactionDate')
+            # Fallback handling in case of an invalid payload structure
+            return Response(
+                {"ResultCode": 1, "ResultDesc": "Invalid payload format: missing CheckoutRequestID"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            payment.phone_number = str(get_callback_item(metadata_items, 'PhoneNumber') or payment.phone_number)
-            payment.save(
-                update_fields=[
-                    'status',
-                    'mpesa_receipt_number',
-                    'transaction_date',
-                    'phone_number',
-                ]
-            )
-        else:
-            payment.status = 'failed'
-            payment.save(update_fields=['status'])
 
-        return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+        checkout_request_id = str(checkout_request_id)
+        print(f"[MPESA CALLBACK] checkout_request_id={checkout_request_id} result_code={result_code}")
+
+        try:
+            # 3. Locate the corresponding payment record in your database
+            payment = Payment.objects.get(checkout_request_id=checkout_request_id)
+
+            # 4. Handle successful payments (ResultCode 0)
+            if result_code == 0:
+                metadata = stk_callback.get('CallbackMetadata', {}).get('Item', []) or []
+
+                mpesa_receipt_number = get_callback_item(metadata, 'MpesaReceiptNumber')
+                transaction_date = get_callback_item(metadata, 'TransactionDate')
+                parsed_date = parse_mpesa_transaction_date(transaction_date)
+
+                payment.status = 'successful'  # Matches your model's STATUS_CHOICES
+                payment.mpesa_receipt_number = mpesa_receipt_number
+                payment.transaction_date = parsed_date
+                payment.save()
+
+                print(
+                    f"[MPESA CALLBACK] Payment successful checkout_id={checkout_request_id} receipt={mpesa_receipt_number}"
+                )
+            else:
+                # 5. Handle failed/canceled payments
+                payment.status = 'failed'
+                payment.save(update_fields=['status'])
+
+                result_desc = stk_callback.get('ResultDesc', 'Unknown error')
+                print(
+                    f"[MPESA CALLBACK] Payment failed checkout_id={checkout_request_id} desc={result_desc}"
+                )
+
+        except Payment.DoesNotExist:
+            # Don't silently ignore: return non-200 so you can spot mismatches.
+            print(
+                f"[MPESA CALLBACK] ERROR: Callback received for untracked checkout_request_id={checkout_request_id}"
+            )
+            return Response(
+                {"ResultCode": 1, "ResultDesc": "Payment record not found for CheckoutRequestID"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Tell Safaricom you received the message successfully.
+        return Response(
+            {"ResultCode": 0, "ResultDesc": "Callback processed successfully"},
+            status=status.HTTP_200_OK,
+        )
+
+
+
 
 
 class ProgressUpdateListCreateView(generics.ListCreateAPIView):

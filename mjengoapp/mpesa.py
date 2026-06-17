@@ -1,11 +1,8 @@
 import base64
-import json
 from datetime import datetime
 from decimal import Decimal
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
+import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
@@ -14,9 +11,25 @@ class DarajaServiceError(Exception):
     """Raised when Safaricom Daraja rejects or cannot process a request."""
 
 
+def normalize_mpesa_phone_number(phone_number):
+    """Normalize common Kenyan phone formats to Daraja's 2547XXXXXXXX or 2541XXXXXXXX format."""
+
+    phone = str(phone_number).strip().replace(' ', '').replace('-', '').replace('+', '')
+
+    if phone.startswith('0'):
+        phone = f'254{phone[1:]}'
+    elif phone.startswith('7') or phone.startswith('1'):
+        phone = f'254{phone}'
+
+    if not phone.isdigit() or len(phone) != 12 or not phone.startswith('254'):
+        raise ValueError('Enter a valid Kenyan phone number in the format 2547XXXXXXXX or 2541XXXXXXXX.')
+
+    return phone
+
+
 class DarajaService:
-    OAUTH_URL = 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
-    STK_PUSH_URL = 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+    OAUTH_PATH = '/oauth/v1/generate?grant_type=client_credentials'
+    STK_PUSH_PATH = '/mpesa/stkpush/v1/processrequest'
 
     @classmethod
     def get_access_token(cls):
@@ -27,7 +40,7 @@ class DarajaService:
         encoded_credentials = base64.b64encode(credentials).decode('utf-8')
 
         response = cls._request_json(
-            cls.OAUTH_URL,
+            cls._build_url(cls.OAUTH_PATH),
             method='GET',
             headers={'Authorization': f'Basic {encoded_credentials}'},
         )
@@ -52,6 +65,7 @@ class DarajaService:
         password, timestamp = cls.generate_password_and_timestamp()
         shortcode = cls._required_setting('MPESA_SHORTCODE')
         callback_url = cls._required_setting('MPESA_CALLBACK_URL')
+        normalized_phone_number = normalize_mpesa_phone_number(phone_number)
 
         # STK Push amount must be a whole-number Kenyan shilling value for Daraja.
         amount_value = int(Decimal(amount))
@@ -61,20 +75,27 @@ class DarajaService:
             'Timestamp': timestamp,
             'TransactionType': 'CustomerPayBillOnline',
             'Amount': amount_value,
-            'PartyA': phone_number,
+            'PartyA': normalized_phone_number,
             'PartyB': shortcode,
-            'PhoneNumber': phone_number,
+            'PhoneNumber': normalized_phone_number,
             'CallBackURL': callback_url,
             'AccountReference': str(account_reference),
             'TransactionDesc': transaction_desc,
         }
 
         return cls._request_json(
-            cls.STK_PUSH_URL,
+            cls._build_url(cls.STK_PUSH_PATH),
             method='POST',
             headers={'Authorization': f'Bearer {access_token}'},
             payload=payload,
         )
+
+    @staticmethod
+    def _build_url(path):
+        base_url = getattr(settings, 'MPESA_BASE_URL', '').rstrip('/')
+        if not base_url:
+            raise ImproperlyConfigured('MPESA_BASE_URL must be configured before using Daraja payments.')
+        return f'{base_url}{path}'
 
     @staticmethod
     def _required_setting(name):
@@ -85,24 +106,26 @@ class DarajaService:
 
     @staticmethod
     def _request_json(url, method='POST', headers=None, payload=None):
-        request_headers = {
+        headers = {
             'Accept': 'application/json',
             **(headers or {}),
         }
-        data = None
-        if payload is not None:
-            data = json.dumps(payload).encode('utf-8')
-            request_headers['Content-Type'] = 'application/json'
 
-        request = Request(url, data=data, headers=request_headers, method=method)
         try:
-            with urlopen(request, timeout=30) as response:
-                return json.loads(response.read().decode('utf-8'))
-        except HTTPError as exc:
-            detail = exc.read().decode('utf-8')
-            raise DarajaServiceError(f'Daraja HTTP {exc.code}: {detail}') from exc
-        except URLError as exc:
-            parsed_url = urlparse(url)
-            raise DarajaServiceError(f'Unable to reach Daraja host {parsed_url.netloc}: {exc.reason}') from exc
-        except json.JSONDecodeError as exc:
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=headers,
+                json=payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            detail = exc.response.text if exc.response is not None else str(exc)
+            status_code = exc.response.status_code if exc.response is not None else 'error'
+            raise DarajaServiceError(f'Daraja HTTP {status_code}: {detail}') from exc
+        except requests.RequestException as exc:
+            raise DarajaServiceError(f'Unable to reach Daraja: {exc}') from exc
+        except ValueError as exc:
             raise DarajaServiceError('Daraja returned an invalid JSON response.') from exc

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .mpesa import normalize_mpesa_phone_number
 from .models import User, WorkerProfile, CustomerProfile, Job, Quotation, Project, Payment, ProgressUpdate, Review, Portfolio, Message, Notification
 
 class UserSerializer(serializers.ModelSerializer):
@@ -53,12 +54,24 @@ class PaymentSerializer(serializers.ModelSerializer):
             'created_at',
         ]
 
+    def validate_phone_number(self, value):
+        try:
+            return normalize_mpesa_phone_number(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc))
+
 
 class StkPushSerializer(serializers.Serializer):
     project_id = serializers.IntegerField()
     phone_number = serializers.CharField(max_length=15)
     amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=1)
     payment_type = serializers.ChoiceField(choices=Payment.PAYMENT_TYPE_CHOICES)
+
+    def validate_phone_number(self, value):
+        try:
+            return normalize_mpesa_phone_number(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc))
 
 
 class ProgressUpdateSerializer(serializers.ModelSerializer):
