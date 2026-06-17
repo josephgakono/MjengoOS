@@ -24,6 +24,8 @@ from .views import (
     StkPushView,
     WorkerProfileDetailView,
     WorkerProfileListCreateView,
+    AcceptQuotationView,
+    RejectQuotationView,
 )
 
 urlpatterns = [
@@ -51,4 +53,6 @@ urlpatterns = [
     path('messages/<int:pk>/', MessageDetailView.as_view(), name='message-detail'),
     path('notifications/', NotificationListCreateView.as_view(), name='notifications'),
     path('notifications/<int:pk>/', NotificationDetailView.as_view(), name='notification-detail'),
+    path('quotations/<int:quotation_id>/accept/',AcceptQuotationView.as_view(),name='accept-quotation'),
+    path('quotations/<int:quotation_id>/reject/',RejectQuotationView.as_view(),name='reject-quotation'),
 ]

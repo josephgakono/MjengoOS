@@ -32,8 +32,10 @@ class QuotationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quotation
         fields = '__all__'
-        read_only_fields = ['worker']
-
+        read_only_fields = [
+            'worker',
+            'status'
+        ]
 
 class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
