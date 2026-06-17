@@ -33,7 +33,6 @@ ALLOWED_HOSTS = [
     '.ngrok-free.dev',
 ]
 
-
 # Application definition
 
 INSTALLED_APPS = [
