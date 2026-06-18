@@ -8,6 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from datetime import datetime
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from .models import (
     CustomerProfile,
     Job,
@@ -244,22 +246,25 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Project.objects.filter(Q(job__customer=user) | Q(worker__user=user))
 
     def check_object_permissions(self, request, obj):
-        super().check_object_permissions(request, obj)
+      super().check_object_permissions(request, obj)
 
-        if request.method in SAFE_METHODS:
-            allowed = (
-                IsProjectWorker().has_object_permission(request, self, obj)
-                or IsProjectCustomer().has_object_permission(request, self, obj)
-            )
-            allowed or self.permission_denied(
-                request,
-                message='Only assigned workers and project owners can view project details.',
-            )
-            return
+      if request.method in SAFE_METHODS:
+        return
 
-        # Business rule: only admins can delete projects; participant edits are still scoped by queryset.
-        if request.method == 'DELETE' and not is_admin_user(request.user):
-            raise PermissionDenied('Only admins can delete projects.')
+      # Only assigned worker can update project status
+      if request.method in ['PUT', 'PATCH']:
+        if (
+            obj.worker.user_id != request.user.id
+            and not is_admin_user(request.user)
+        ):
+            raise PermissionDenied(
+                'Only the assigned worker can update project status.'
+            )
+
+      if request.method == 'DELETE' and not is_admin_user(request.user):
+        raise PermissionDenied(
+            'Only admins can delete projects.'
+        )
 
 
 class PaymentListCreateView(generics.ListCreateAPIView):
@@ -377,10 +382,12 @@ class StkPushView(APIView):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class MpesaCallbackView(APIView):
-    # CRITICAL: Allow Safaricom's webhook to hit your server without a JWT token or session
+    # CRITICAL: Allow Safaricom's webhook to hit your server without a CSRF token/session/JWT token
     permission_classes = [AllowAny]
-    authentication_classes = [] 
+    authentication_classes = []
+
 
     def post(self, request, *args, **kwargs):
         # 1. Grab the raw payload sent by M-Pesa
