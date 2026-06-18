@@ -38,6 +38,11 @@ class WorkerProfile(models.Model):
         blank=True
     )
 
+    mpesa_phone_number = models.CharField(
+    max_length=15,
+    blank=True
+    )
+
     average_rating = models.FloatField(default=0)
 
     def __str__(self):
@@ -180,9 +185,23 @@ class Payment(models.Model):
     )
 
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
-        ('successful', 'Successful'),
-        ('failed', 'Failed'),
+    ('pending', 'Pending'),
+    ('successful', 'Successful'),
+    ('failed', 'Failed'),
+)
+
+    escrow_status = models.CharField(
+    max_length=20,
+    choices=[
+        ('held', 'Held'),
+        ('released', 'Released'),
+    ],
+    default='held'
+)
+
+    released_at = models.DateTimeField(
+    null=True,
+    blank=True
     )
 
     project = models.ForeignKey(

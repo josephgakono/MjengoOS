@@ -53,6 +53,8 @@ class PaymentSerializer(serializers.ModelSerializer):
             'checkout_request_id',
             'mpesa_receipt_number',
             'transaction_date',
+            'escrow_status',
+            'released_at',
             'created_at',
         ]
 

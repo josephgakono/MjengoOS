@@ -265,7 +265,26 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
         raise PermissionDenied(
             'Only admins can delete projects.'
         )
+    def perform_update(self, serializer):
+     project = serializer.save()
 
+     if project.status == 'completed' and not project.actual_completion:
+        project.actual_completion = timezone.now().date()
+        project.save()
+
+        project.job.status = 'completed'
+        project.job.save()
+
+        payments = Payment.objects.filter(
+            project=project,
+            status='successful',
+            escrow_status='held'
+        )
+
+        for payment in payments:
+            payment.escrow_status = 'released'
+            payment.released_at = timezone.now()
+            payment.save()
 
 class PaymentListCreateView(generics.ListCreateAPIView):
     serializer_class = PaymentSerializer
@@ -426,8 +445,8 @@ class MpesaCallbackView(APIView):
                 mpesa_receipt_number = get_callback_item(metadata, 'MpesaReceiptNumber')
                 transaction_date = get_callback_item(metadata, 'TransactionDate')
                 parsed_date = parse_mpesa_transaction_date(transaction_date)
-
-                payment.status = 'successful'  # Matches your model's STATUS_CHOICES
+                payment.status = 'successful'
+                payment.escrow_status = 'held'
                 payment.mpesa_receipt_number = mpesa_receipt_number
                 payment.transaction_date = parsed_date
                 payment.save()
