@@ -1,11 +1,21 @@
 from rest_framework import permissions
 
+from .models import CustomerProfile
+
 
 def is_admin_user(user):
     return bool(
         user
         and user.is_authenticated
         and (user.user_type == 'admin' or user.is_staff or user.is_superuser)
+    )
+
+
+def has_customer_profile(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and CustomerProfile.objects.filter(user=user).exists()
     )
 
 
@@ -26,6 +36,15 @@ class IsCustomer(permissions.BasePermission):
         return is_admin_user(request.user) or (
             request.user.is_authenticated and request.user.user_type == 'customer'
         )
+
+
+class HasCustomerProfile(permissions.BasePermission):
+    """Allow only authenticated users who have completed a customer profile."""
+
+    message = 'A customer profile is required to create this resource.'
+
+    def has_permission(self, request, view):
+        return has_customer_profile(request.user)
 
 
 class IsWorker(permissions.BasePermission):

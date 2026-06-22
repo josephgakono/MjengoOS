@@ -25,6 +25,7 @@ from .models import (
 )
 from .mpesa import DarajaService, DarajaServiceError
 from .permissions import (
+    HasCustomerProfile,
     IsCustomer,
     IsJobOwner,
     IsProjectCustomer,
@@ -75,9 +76,9 @@ class JobListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        # Business rule: only customers can create jobs; admins keep full access.
+        # Business rule: only users with a customer profile can create jobs.
         if self.request.method == 'POST':
-            return [IsAuthenticated(), IsCustomer()]
+            return [IsAuthenticated(), HasCustomerProfile()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -211,6 +212,12 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
 class ProjectListCreateView(generics.ListCreateAPIView):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        # Business rule: only users with a customer profile can create projects.
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), HasCustomerProfile()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         # Business rule: admins see every project; customers/workers see only projects they participate in.
