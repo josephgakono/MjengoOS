@@ -56,6 +56,34 @@ def get_worker_profile(user):
     return WorkerProfile.objects.filter(user=user).first()
 
 
+def get_customer_profile(user):
+    return CustomerProfile.objects.filter(user=user).first()
+
+
+def visible_jobs_for_user(user):
+    if is_admin_user(user):
+        return Job.objects.all()
+    if get_customer_profile(user):
+        return Job.objects.filter(customer=user)
+    if get_worker_profile(user):
+        return Job.objects.filter(
+            Q(status__in=['open', 'quoted'])
+            | Q(quotation__worker__user=user)
+            | Q(project__worker__user=user)
+        ).distinct()
+    return Job.objects.none()
+
+
+def visible_projects_for_user(user):
+    if is_admin_user(user):
+        return Project.objects.all()
+    if get_customer_profile(user):
+        return Project.objects.filter(job__customer=user)
+    if get_worker_profile(user):
+        return Project.objects.filter(worker__user=user)
+    return Project.objects.none()
+
+
 def get_callback_item(metadata_items, item_name):
     # Daraja callback metadata is a list of name/value pairs, so this helper safely extracts one value.
     for item in metadata_items:
@@ -82,11 +110,8 @@ class JobListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Business rule: admins see all jobs, customers see their own jobs, workers can browse open work.
-        user = self.request.user
-        if is_admin_user(user) or user.user_type == 'worker':
-            return Job.objects.all()
-        return Job.objects.filter(customer=user)
+        # Business rule: jobs revolve around the authenticated customer/worker profile.
+        return visible_jobs_for_user(self.request.user)
 
     def perform_create(self, serializer):
         # Business rule: clients cannot spoof job ownership; creator is always the authenticated customer.
@@ -98,11 +123,8 @@ class JobDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Business rule: workers may view jobs, but only owners/admins can reach customer-owned details.
-        user = self.request.user
-        if is_admin_user(user) or user.user_type == 'worker':
-            return Job.objects.all()
-        return Job.objects.filter(customer=user)
+        # Business rule: job details are limited to visible work for this user.
+        return visible_jobs_for_user(self.request.user)
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)
@@ -125,30 +147,66 @@ class JobDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class WorkerProfileListCreateView(generics.ListCreateAPIView):
-    queryset = WorkerProfile.objects.all()
     serializer_class = WorkerProfileSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if is_admin_user(user):
+            return WorkerProfile.objects.all()
+        if get_worker_profile(user):
+            return WorkerProfile.objects.filter(user=user)
+        if get_customer_profile(user):
+            return WorkerProfile.objects.filter(project__job__customer=user).distinct()
+        return WorkerProfile.objects.none()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
 
 class WorkerProfileDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = WorkerProfile.objects.all()
     serializer_class = WorkerProfileSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if is_admin_user(user):
+            return WorkerProfile.objects.all()
+        if get_worker_profile(user):
+            return WorkerProfile.objects.filter(user=user)
+        if get_customer_profile(user):
+            return WorkerProfile.objects.filter(project__job__customer=user).distinct()
+        return WorkerProfile.objects.none()
+
 
 class CustomerProfileListCreateView(generics.ListCreateAPIView):
-    queryset = CustomerProfile.objects.all()
     serializer_class = CustomerProfileSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if is_admin_user(user):
+            return CustomerProfile.objects.all()
+        if get_customer_profile(user):
+            return CustomerProfile.objects.filter(user=user)
+        if get_worker_profile(user):
+            return CustomerProfile.objects.filter(user__job__project__worker__user=user).distinct()
+        return CustomerProfile.objects.none()
 
 
 class CustomerProfileDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = CustomerProfile.objects.all()
     serializer_class = CustomerProfileSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if is_admin_user(user):
+            return CustomerProfile.objects.all()
+        if get_customer_profile(user):
+            return CustomerProfile.objects.filter(user=user)
+        if get_worker_profile(user):
+            return CustomerProfile.objects.filter(user__job__project__worker__user=user).distinct()
+        return CustomerProfile.objects.none()
 
 
 class QuotationListCreateView(generics.ListCreateAPIView):
@@ -220,11 +278,8 @@ class ProjectListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Business rule: admins see every project; customers/workers see only projects they participate in.
-        user = self.request.user
-        if is_admin_user(user):
-            return Project.objects.all()
-        return Project.objects.filter(Q(job__customer=user) | Q(worker__user=user))
+        # Business rule: projects revolve around the authenticated customer/worker profile.
+        return visible_projects_for_user(self.request.user)
 
     def perform_create(self, serializer):
         job = serializer.validated_data['job']
@@ -246,11 +301,8 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Business rule: assigned workers and project owners can view details; other users receive 404.
-        user = self.request.user
-        if is_admin_user(user):
-            return Project.objects.all()
-        return Project.objects.filter(Q(job__customer=user) | Q(worker__user=user))
+        # Business rule: project details are limited to visible work for this user.
+        return visible_projects_for_user(self.request.user)
 
     def check_object_permissions(self, request, obj):
       super().check_object_permissions(request, obj)
