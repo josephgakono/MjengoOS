@@ -8,6 +8,27 @@ class UserSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'username',
+            'email',
+            'password',
+            'user_type',
+            'phone',
+            'profile_picture',
+        ]
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        return User.objects.create_user(password=password, **validated_data)
+
+
 class WorkerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkerProfile

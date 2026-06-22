@@ -45,6 +45,7 @@ from .serializers import (
     QuotationSerializer,
     ReviewSerializer,
     StkPushSerializer,
+    UserRegistrationSerializer,
     WorkerProfileSerializer,
 )
 
@@ -97,6 +98,12 @@ def parse_mpesa_transaction_date(raw_transaction_date):
         return None
     parsed_date = datetime.strptime(str(raw_transaction_date), '%Y%m%d%H%M%S')
     return timezone.make_aware(parsed_date, timezone.get_current_timezone())
+
+
+class UserRegistrationView(generics.CreateAPIView):
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
 
 class JobListCreateView(generics.ListCreateAPIView):

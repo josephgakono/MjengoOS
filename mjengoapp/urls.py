@@ -22,6 +22,7 @@ from .views import (
     ReviewDetailView,
     ReviewListCreateView,
     StkPushView,
+    UserRegistrationView,
     WorkerProfileDetailView,
     WorkerProfileListCreateView,
     AcceptQuotationView,
@@ -29,6 +30,8 @@ from .views import (
 )
 
 urlpatterns = [
+    path('signup/', UserRegistrationView.as_view(), name='signup'),
+    path('create-user/', UserRegistrationView.as_view(), name='create-user'),
     path('jobs/', JobListCreateView.as_view(), name='jobs'),
     path('jobs/<int:pk>/', JobDetailView.as_view(), name='job-detail'),
     path('workerprofile/', WorkerProfileListCreateView.as_view(), name='workerprofile'),
