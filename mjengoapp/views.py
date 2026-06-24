@@ -332,11 +332,25 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
             'Only admins can delete projects.'
         )
     def perform_update(self, serializer):
-     project = serializer.save()
+        project = serializer.save()
 
-     if project.status == 'completed' and not project.actual_completion:
-        project.actual_completion = timezone.now().date()
-        project.save()
+        # Business rule: workers cannot mark a project complete unless they have submitted at least
+        # two progress updates for the project.
+        if (
+            project.status == 'completed'
+            and not project.actual_completion
+            and not is_admin_user(self.request.user)
+            and ProgressUpdate.objects.filter(project=project).count() < 2
+        ):
+            raise ValidationError(
+                'At least two progress updates are required before marking the project completed.'
+            )
+
+        if project.status == 'completed' and not project.actual_completion:
+            project.actual_completion = timezone.now().date()
+            project.save()
+
+
 
         project.job.status = 'completed'
         project.job.save()
@@ -568,11 +582,29 @@ class ProgressUpdateListCreateView(generics.ListCreateAPIView):
         if project.worker.user_id != self.request.user.id and not is_admin_user(self.request.user):
             raise PermissionDenied('Only the assigned worker can create progress updates.')
 
+        # Business rule: workers cannot submit the first progress update unless the customer has
+        # sent the quotation amount and the system has it held.
+        if (
+            not is_admin_user(self.request.user)
+            and ProgressUpdate.objects.filter(project=project).count() == 0
+        ):
+            required_amount = Quotation.objects.filter(job=project.job, worker=project.worker).values_list('amount', flat=True).first()
+            if not required_amount:
+                raise ValidationError('Quotation amount not found for this project.')
+            if not Payment.objects.filter(
+                project=project,
+                status='successful',
+                escrow_status='held',
+                amount=required_amount,
+            ).exists():
+                raise PermissionDenied('Customer must submit the quotation amount first (payment held) before the first progress update.')
+
         # Business rule: completed projects do not accept new progress updates.
         if project.status == 'completed' and not is_admin_user(self.request.user):
             raise PermissionDenied('Completed projects cannot receive progress updates.')
 
         serializer.save(project=project)
+
 
 
 class ProgressUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
