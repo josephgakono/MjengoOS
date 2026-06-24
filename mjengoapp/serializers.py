@@ -25,8 +25,36 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def create(self, validated_data):
-        password = validated_data.pop('password')
-        return User.objects.create_user(password=password, **validated_data)
+        password = validated_data.pop("password")
+
+        user = User.objects.create_user(
+            password=password,
+            **validated_data
+        )
+
+        if user.user_type == "customer":
+            CustomerProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    "location": "",
+                    "preferred_contact": "Phone",
+                },
+            )
+
+        elif user.user_type in ["worker", "contractor"]:
+            WorkerProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    "profession": "",
+                    "experience_years": 0,
+                    "location": "",
+                    "bio": "",
+                    "hourly_rate": 0,
+                },
+            )
+
+        return user
+
 
 
 class WorkerProfileSerializer(serializers.ModelSerializer):
