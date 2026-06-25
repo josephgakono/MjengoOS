@@ -148,6 +148,9 @@ class Project(models.Model):
         ('paused', 'Paused'),
     )
 
+    payment_received = models.BooleanField(default=False)
+
+
     job = models.OneToOneField(
         Job,
         on_delete=models.CASCADE
