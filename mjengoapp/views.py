@@ -538,6 +538,13 @@ class MpesaCallbackView(APIView):
                 payment.transaction_date = parsed_date
                 payment.save()
 
+                # Update project payment flag once payment is received
+                project = payment.project
+                if not project.payment_received:
+                    project.payment_received = True
+                    project.save(update_fields=['payment_received'])
+
+
                 print(
                     f"[MPESA CALLBACK] Payment successful checkout_id={checkout_request_id} receipt={mpesa_receipt_number}"
                 )
