@@ -520,7 +520,14 @@ class MpesaCallbackView(APIView):
 
             # 4. Handle successful payments (ResultCode 0)
             if result_code == 0:
+                # Idempotency guard: ignore duplicate callbacks for the same payment
+                if payment.status == 'successful':
+                    return Response(
+                        {"ResultCode": 0, "ResultDesc": "Callback already processed"},
+                        status=status.HTTP_200_OK,
+                    )
                 metadata = stk_callback.get('CallbackMetadata', {}).get('Item', []) or []
+
 
                 mpesa_receipt_number = get_callback_item(metadata, 'MpesaReceiptNumber')
                 transaction_date = get_callback_item(metadata, 'TransactionDate')
