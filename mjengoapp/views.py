@@ -22,6 +22,7 @@ from .models import (
     Quotation,
     Review,
     WorkerProfile,
+    User,
 )
 from .mpesa import DarajaService, DarajaServiceError
 from .permissions import (
@@ -47,6 +48,7 @@ from .serializers import (
     StkPushSerializer,
     UserRegistrationSerializer,
     WorkerProfileSerializer,
+    PublicUserSerializer,
 )
 
 
@@ -98,6 +100,12 @@ def parse_mpesa_transaction_date(raw_transaction_date):
         return None
     parsed_date = datetime.strptime(str(raw_transaction_date), '%Y%m%d%H%M%S')
     return timezone.make_aware(parsed_date, timezone.get_current_timezone())
+
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = PublicUserSerializer
+    permission_classes = [AllowAny]
 
 
 class UserRegistrationView(generics.CreateAPIView):

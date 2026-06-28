@@ -2,10 +2,22 @@ from rest_framework import serializers
 from .mpesa import normalize_mpesa_phone_number
 from .models import User, WorkerProfile, CustomerProfile, Job, Quotation, Project, Payment, ProgressUpdate, Review, Portfolio, Message, Notification
 
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = '__all__'
+
+
+class PublicUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'username',
+            'profile_picture',
+            'user_type',
+        ]
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -56,7 +68,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 
-
 class WorkerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkerProfile
@@ -85,6 +96,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             'worker',
             'status'
         ]
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -158,3 +170,4 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = '__all__'
+
