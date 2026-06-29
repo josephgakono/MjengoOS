@@ -171,3 +171,22 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = '__all__'
 
+
+class PublicJobSerializer(serializers.ModelSerializer):
+    customer_username = serializers.CharField(source='customer.username', read_only=True)
+
+    class Meta:
+        model = Job
+        fields = [
+            'id',
+            'title',
+            'description',
+            'location',
+            'budget',
+            'status',
+            'image',
+            'created_at',
+            'customer_username',
+        ]
+
+

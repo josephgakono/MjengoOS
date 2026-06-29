@@ -28,9 +28,13 @@ from .views import (
     AcceptQuotationView,
     RejectQuotationView,
     UserListView,
+    PublicOpenJobsListView,
 )
 
+
+
 urlpatterns = [
+
     path('signup/', UserRegistrationView.as_view(), name='signup'),
     path('create-user/', UserRegistrationView.as_view(), name='create-user'),
     path('users/', UserListView.as_view(), name='users'),
@@ -60,4 +64,5 @@ urlpatterns = [
     path('notifications/<int:pk>/', NotificationDetailView.as_view(), name='notification-detail'),
     path('quotations/<int:quotation_id>/accept/',AcceptQuotationView.as_view(),name='accept-quotation'),
     path('quotations/<int:quotation_id>/reject/',RejectQuotationView.as_view(),name='reject-quotation'),
+    path('public/jobs/open/', PublicOpenJobsListView.as_view(), name='public-open-jobs'),
 ]

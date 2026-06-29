@@ -49,7 +49,21 @@ from .serializers import (
     UserRegistrationSerializer,
     WorkerProfileSerializer,
     PublicUserSerializer,
+    PublicJobSerializer,
 )
+
+
+class PublicOpenJobsListView(generics.ListAPIView):
+
+
+    """Public endpoint: list only OPEN jobs and include the customer who created them."""
+
+    serializer_class = PublicJobSerializer
+
+    def get_queryset(self):
+        return Job.objects.filter(status='open')
+
+
 
 
 SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
