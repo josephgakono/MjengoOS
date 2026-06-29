@@ -687,51 +687,71 @@ class ReviewListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        # Business rule: only customers can create reviews; admins retain full access.
+        # Business rule: both customers and workers can create reviews after the project is completed.
         if self.request.method == 'POST':
-            return [IsAuthenticated(), IsCustomer()]
+            return [IsAuthenticated()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Business rule: customers see reviews for their projects; workers see reviews about themselves.
+        # Business rule: authors see reviews they created; admins see all.
         user = self.request.user
         if is_admin_user(user):
             return Review.objects.all()
         if user.user_type == 'customer':
             return Review.objects.filter(customer=user)
         if user.user_type == 'worker':
-            return Review.objects.filter(worker__user=user)
+            # worker reviews are stored with worker=<reviewed worker profile> and customer=<review author user>
+            # For worker's own authored reviews we filter by the "customer" field that holds the author.
+            return Review.objects.filter(customer=user)
         return Review.objects.none()
 
     def perform_create(self, serializer):
         project = serializer.validated_data['project']
         worker = serializer.validated_data['worker']
-        customer = self.request.user
 
-        # Business rule: customer must own the reviewed project.
-        if project.job.customer.username != customer.username and not is_admin_user(customer):
-            raise PermissionDenied('Only the project owner can review this project.')
-
+        author = self.request.user  # the user leaving the review (customer OR worker)
 
         # Business rule: reviews are allowed only after project completion.
-        if project.status != 'completed' and not is_admin_user(customer):
+        if project.status != 'completed' and not is_admin_user(author):
             raise PermissionDenied('Only completed projects can be reviewed.')
 
-        # Business rule: a worker cannot review themselves through a customer account.
-        if worker.user.username == customer.username and not is_admin_user(customer):
-            raise PermissionDenied('Workers cannot review themselves.')
+        job_customer = project.job.customer
+        project_worker = project.worker.user
+
+        # Determine review target vs author depending on the author type.
+        if author.user_type == 'customer':
+            # Customer reviews the worker (target = project.worker).
+            if job_customer.username != author.username and not is_admin_user(author):
+                raise PermissionDenied('Only the project owner can review this project.')
+
+            # Serializer "worker" should match the assigned worker.
+            if worker.user_id != project.worker_id and not is_admin_user(author):
+                raise ValidationError('Reviews must target the assigned project worker.')
+
+            serializer.save(project=project, customer=author, worker=project.worker)
+            return
+
+        if author.user_type == 'worker':
+            # Worker reviews the customer.
+            # Model has only (customer, worker) fields, so we reuse it:
+            # - customer = review author (worker in this case)
+            # - worker = review target worker profile (project.worker)
+            if project_worker.username != author.username and not is_admin_user(author):
+                raise PermissionDenied('Only the assigned worker can review this project.')
+
+            if worker.user_id != project.worker_id and not is_admin_user(author):
+                raise ValidationError('Reviews must target the assigned project worker.')
+
+            # Only one review per author per project.
+            if Review.objects.filter(project=project, customer=author).exists():
+                raise ValidationError('This user has already reviewed this project.')
+
+            serializer.save(project=project, customer=author, worker=project.worker)
+            return
 
 
-        # Business rule: reviewed worker must be the worker assigned to the project.
-        if worker.user.username != project.worker.user.username and not is_admin_user(customer):
-            raise ValidationError('Reviews must target the assigned project worker.')
-
-
-        # Business rule: only one review is allowed per customer per project.
-        if Review.objects.filter(project=project, customer=customer).exists():
-            raise ValidationError('This customer has already reviewed this project.')
-
-        serializer.save(project=project, customer=customer, worker=worker)
+        # Contractors/admin follow admin override only.
+        raise PermissionDenied('Unsupported user type for reviews.')
 
 
 class ReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
