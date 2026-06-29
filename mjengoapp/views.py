@@ -65,6 +65,9 @@ class PublicOpenJobsListView(generics.ListAPIView):
     """Public endpoint: list only OPEN jobs and include the customer who created them."""
 
     serializer_class = PublicJobSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
 
     def get_queryset(self):
         return Job.objects.filter(status='open')
