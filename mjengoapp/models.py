@@ -425,10 +425,12 @@ class Feedback(models.Model):
     phone_number = models.CharField(max_length=15, blank=True, default='')
 
     user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='feedbacks'
-    )
+    User,
+    on_delete=models.CASCADE,
+    related_name="feedbacks",
+    null=True,
+    blank=True,
+)
 
     category = models.CharField(
         max_length=20,

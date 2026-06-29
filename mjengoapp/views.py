@@ -931,17 +931,35 @@ class AcceptQuotationView(APIView):
 
 class FeedbackListCreateView(generics.ListCreateAPIView):
     serializer_class = FeedbackSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        # Admin can see all feedback; regular users can only see their own.
+        """
+        - Admins can view all feedback.
+        - Logged-in users can view only their own feedback.
+        - Anonymous users cannot list feedback.
+        """
+
+        if not self.request.user.is_authenticated:
+            return Feedback.objects.none()
+
         if is_admin_user(self.request.user):
-            return Feedback.objects.all().order_by('-created_at')
-        return Feedback.objects.filter(user=self.request.user).order_by('-created_at')
+            return Feedback.objects.all().order_by("-created_at")
+
+        return Feedback.objects.filter(
+            user=self.request.user
+        ).order_by("-created_at")
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        """
+        Save the logged-in user if available.
+        Otherwise allow anonymous feedback.
+        """
 
+        if self.request.user.is_authenticated:
+            serializer.save(user=self.request.user)
+        else:
+            serializer.save()
 
 class FeedbackDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = FeedbackSerializer
