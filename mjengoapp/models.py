@@ -58,6 +58,17 @@ class WorkerProfile(models.Model):
 
     average_rating = models.FloatField(default=0)
 
+    def update_combined_rating(self):
+        """Compute combined rating out of 5 from completed projects where this worker was reviewed."""
+        completed_reviews = Review.objects.filter(
+            project__status='completed',
+            worker=self,
+        )
+        avg = completed_reviews.aggregate(models.Avg('rating'))['rating__avg']
+        self.average_rating = avg if avg is not None else 0
+        self.save(update_fields=['average_rating'])
+
+
     def __str__(self):
         return self.user.username
 

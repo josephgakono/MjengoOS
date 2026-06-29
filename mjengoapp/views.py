@@ -729,7 +729,10 @@ class ReviewListCreateView(generics.ListCreateAPIView):
                 raise ValidationError('Reviews must target the assigned project worker.')
 
             serializer.save(project=project, customer=author, worker=project.worker)
+            # Update combined rating for the reviewed worker profile (out of 5)
+            project.worker.update_combined_rating()
             return
+
 
         if author.user_type == 'worker':
             # Worker reviews the customer.
