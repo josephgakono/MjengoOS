@@ -29,7 +29,10 @@ from .views import (
     RejectQuotationView,
     UserListView,
     PublicOpenJobsListView,
+    FeedbackListCreateView,
+    FeedbackDetailView,
 )
+
 
 
 
@@ -65,4 +68,6 @@ urlpatterns = [
     path('quotations/<int:quotation_id>/accept/',AcceptQuotationView.as_view(),name='accept-quotation'),
     path('quotations/<int:quotation_id>/reject/',RejectQuotationView.as_view(),name='reject-quotation'),
     path('public/jobs/open/', PublicOpenJobsListView.as_view(), name='public-open-jobs'),
+    path('feedbacks/', FeedbackListCreateView.as_view(), name='feedback-list-create'),
+    path('feedbacks/<int:pk>/', FeedbackDetailView.as_view(), name='feedback-detail'),
 ]

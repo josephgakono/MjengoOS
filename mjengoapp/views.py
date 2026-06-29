@@ -12,6 +12,9 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from .models import (
     CustomerProfile,
+    Feedback,
+    Notification,
+
     Job,
     Message,
     Notification,
@@ -24,6 +27,7 @@ from .models import (
     WorkerProfile,
     User,
 )
+
 from .mpesa import DarajaService, DarajaServiceError
 from .permissions import (
     HasCustomerProfile,
@@ -50,7 +54,9 @@ from .serializers import (
     WorkerProfileSerializer,
     PublicUserSerializer,
     PublicJobSerializer,
+    FeedbackSerializer,
 )
+
 
 
 class PublicOpenJobsListView(generics.ListAPIView):
@@ -919,6 +925,41 @@ class AcceptQuotationView(APIView):
             status=status.HTTP_200_OK,
         )
     
+
+class FeedbackListCreateView(generics.ListCreateAPIView):
+    serializer_class = FeedbackSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Admin can see all feedback; regular users can only see their own.
+        if is_admin_user(self.request.user):
+            return Feedback.objects.all().order_by('-created_at')
+        return Feedback.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class FeedbackDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = FeedbackSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if is_admin_user(self.request.user):
+            return Feedback.objects.all().order_by('-created_at')
+        return Feedback.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_update(self, serializer):
+        # Only admins can update/resolve feedback.
+        if not is_admin_user(self.request.user):
+            raise PermissionDenied('Only admins can update feedback status.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not is_admin_user(self.request.user):
+            raise PermissionDenied('Only admins can delete feedback.')
+        instance.delete()
+
 
 class RejectQuotationView(APIView):
     permission_classes = [IsAuthenticated, IsCustomer]

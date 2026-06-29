@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .mpesa import normalize_mpesa_phone_number
-from .models import User, WorkerProfile, CustomerProfile, Job, Quotation, Project, Payment, ProgressUpdate, Review, Portfolio, Message, Notification
+from .models import User, WorkerProfile, CustomerProfile, Job, Quotation, Project, Payment, ProgressUpdate, Review, Portfolio, Message, Notification, Feedback
+
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -188,5 +189,13 @@ class PublicJobSerializer(serializers.ModelSerializer):
             'created_at',
             'customer_username',
         ]
+
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Feedback
+        fields = ['id', 'category', 'message', 'status', 'created_at', 'user']
+        read_only_fields = ['id', 'status', 'created_at', 'user']
+
 
 

@@ -12,5 +12,7 @@ admin.site.register(Review)
 admin.site.register(Portfolio)
 admin.site.register(Message)
 admin.site.register(Notification)
+admin.site.register(Feedback)
 
 # Register your models here.
+
