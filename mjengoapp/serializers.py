@@ -194,8 +194,20 @@ class PublicJobSerializer(serializers.ModelSerializer):
 class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feedback
-        fields = ['id', 'category', 'message', 'status', 'created_at', 'user']
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'phone_number',
+            'category',
+            'message',
+            'status',
+            'created_at',
+            'user',
+        ]
         read_only_fields = ['id', 'status', 'created_at', 'user']
+
 
 
 

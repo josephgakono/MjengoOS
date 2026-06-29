@@ -419,6 +419,11 @@ class Feedback(models.Model):
         ('resolved', 'Resolved'),
     )
 
+    first_name = models.CharField(max_length=150, blank=True, default='')
+    last_name = models.CharField(max_length=150, blank=True, default='')
+    email = models.EmailField(blank=True, default='')
+    phone_number = models.CharField(max_length=15, blank=True, default='')
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
