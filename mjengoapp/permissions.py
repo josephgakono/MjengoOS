@@ -73,7 +73,9 @@ class IsJobOwner(permissions.BasePermission):
             return True
 
         job = getattr(obj, 'job', obj)
-        return getattr(job, 'customer_id', None) == request.user.id
+        job_customer_username = getattr(job, 'customer', None)
+        return bool(job_customer_username and job_customer_username.username == request.user.username)
+
 
 
 class IsProjectWorker(permissions.BasePermission):
@@ -85,7 +87,8 @@ class IsProjectWorker(permissions.BasePermission):
 
         project = getattr(obj, 'project', obj)
         worker = getattr(project, 'worker', None)
-        return bool(worker and worker.user_id == request.user.id)
+        return bool(worker and worker.user.username == request.user.username)
+
 
 
 class IsProjectCustomer(permissions.BasePermission):
@@ -97,4 +100,5 @@ class IsProjectCustomer(permissions.BasePermission):
 
         project = getattr(obj, 'project', obj)
         job = getattr(project, 'job', None)
-        return bool(job and job.customer_id == request.user.id)
+        return bool(job and job.customer.username == request.user.username)
+

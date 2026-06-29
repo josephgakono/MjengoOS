@@ -274,8 +274,9 @@ class QuotationDetailView(generics.RetrieveUpdateDestroyAPIView):
             return
 
         # Business rule: only the worker who created a quotation can edit it.
-        if obj.worker.user_id != request.user.id and not is_admin_user(request.user):
+        if obj.worker.user.username != request.user.username and not is_admin_user(request.user):
             raise PermissionDenied('Only the quotation owner can modify this quotation.')
+
 
         # Business rule: accepted quotations become immutable.
         if obj.status == 'accepted' and not is_admin_user(request.user):
@@ -301,8 +302,9 @@ class ProjectListCreateView(generics.ListCreateAPIView):
         worker = serializer.validated_data['worker']
 
         # Business rule: project owners create projects for their jobs after accepting a quotation.
-        if job.customer_id != self.request.user.id and not is_admin_user(self.request.user):
+        if job.customer.username != self.request.user.username and not is_admin_user(self.request.user):
             raise PermissionDenied('Only the job owner can create a project for this job.')
+
 
         # Business rule: projects can only be created from accepted quotations.
         if not Quotation.objects.filter(job=job, worker=worker, status='accepted').exists():
@@ -395,8 +397,9 @@ class PaymentListCreateView(generics.ListCreateAPIView):
         project = serializer.validated_data['project']
 
         # Business rule: workers cannot initiate payments and customers can only pay for their own projects.
-        if project.job.customer_id != self.request.user.id and not is_admin_user(self.request.user):
+        if project.job.customer.username != self.request.user.username and not is_admin_user(self.request.user):
             raise PermissionDenied('Only the project owner can create a payment for this project.')
+
 
         customer = project.job.customer if is_admin_user(self.request.user) else self.request.user
         serializer.save(customer=customer)
@@ -435,8 +438,9 @@ class StkPushView(APIView):
         amount = serializer.validated_data['amount']
         payment_type = serializer.validated_data['payment_type']
 
-        if project.job.customer_id != request.user.id and not is_admin_user(request.user):
+        if project.job.customer.username != request.user.username and not is_admin_user(request.user):
             raise PermissionDenied('Only the project owner can initiate this payment.')
+
 
         customer = project.job.customer if is_admin_user(request.user) else request.user
 
@@ -601,8 +605,9 @@ class ProgressUpdateListCreateView(generics.ListCreateAPIView):
         project = serializer.validated_data['project']
 
         # Business rule: only the assigned worker can create progress updates.
-        if project.worker.user_id != self.request.user.id and not is_admin_user(self.request.user):
+        if project.worker.user.username != self.request.user.username and not is_admin_user(self.request.user):
             raise PermissionDenied('Only the assigned worker can create progress updates.')
+
 
         # Business rule: workers cannot submit the first progress update unless the customer has
         # sent the quotation amount and the system has it held.
@@ -646,8 +651,9 @@ class ProgressUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
             return
 
         # Business rule: only assigned workers maintain progress records before completion.
-        if obj.project.worker.user_id != request.user.id and not is_admin_user(request.user):
+        if obj.project.worker.user.username != request.user.username and not is_admin_user(request.user):
             raise PermissionDenied('Only the assigned worker can modify progress updates.')
+
         if obj.project.status == 'completed' and not is_admin_user(request.user):
             raise PermissionDenied('Completed project progress cannot be modified.')
 
@@ -679,20 +685,23 @@ class ReviewListCreateView(generics.ListCreateAPIView):
         customer = self.request.user
 
         # Business rule: customer must own the reviewed project.
-        if project.job.customer_id != customer.id and not is_admin_user(customer):
+        if project.job.customer.username != customer.username and not is_admin_user(customer):
             raise PermissionDenied('Only the project owner can review this project.')
+
 
         # Business rule: reviews are allowed only after project completion.
         if project.status != 'completed' and not is_admin_user(customer):
             raise PermissionDenied('Only completed projects can be reviewed.')
 
         # Business rule: a worker cannot review themselves through a customer account.
-        if worker.user_id == customer.id and not is_admin_user(customer):
+        if worker.user.username == customer.username and not is_admin_user(customer):
             raise PermissionDenied('Workers cannot review themselves.')
 
+
         # Business rule: reviewed worker must be the worker assigned to the project.
-        if worker.id != project.worker_id and not is_admin_user(customer):
+        if worker.user.username != project.worker.user.username and not is_admin_user(customer):
             raise ValidationError('Reviews must target the assigned project worker.')
+
 
         # Business rule: only one review is allowed per customer per project.
         if Review.objects.filter(project=project, customer=customer).exists():
@@ -754,8 +763,9 @@ class PortfolioDetailView(generics.RetrieveUpdateDestroyAPIView):
             return
 
         # Business rule: workers can only edit or delete their own portfolio entries.
-        if obj.worker.user_id != request.user.id and not is_admin_user(request.user):
+        if obj.worker.user.username != request.user.username and not is_admin_user(request.user):
             raise PermissionDenied('Only the portfolio owner can modify this entry.')
+
 
 
 class MessageListCreateView(generics.ListCreateAPIView):
@@ -826,10 +836,11 @@ class AcceptQuotationView(APIView):
         )
 
         # Only the owner of the job can accept quotations
-        if quotation.job.customer_id != request.user.id:
+        if quotation.job.customer.username != request.user.username:
             raise PermissionDenied(
                 "Only the job owner can accept quotations."
             )
+
 
         # Prevent accepting twice
         if quotation.status == "accepted":
@@ -871,10 +882,11 @@ class RejectQuotationView(APIView):
             id=quotation_id
         )
 
-        if quotation.job.customer_id != request.user.id:
+        if quotation.job.customer.username != request.user.username:
             raise PermissionDenied(
                 "Only the job owner can reject quotations."
             )
+
 
         quotation.status = "rejected"
         quotation.save()

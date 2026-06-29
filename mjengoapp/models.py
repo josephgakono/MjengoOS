@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
+
 
 
 class User(AbstractUser):
@@ -26,7 +28,18 @@ class WorkerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     profession = models.CharField(max_length=100)
+
+    def clean(self):
+        # Enforce mutual exclusivity: a User must have only ONE profile (worker OR customer).
+        if CustomerProfile.objects.filter(user=self.user).exclude(pk=self.pk).exists():
+            raise ValidationError('This account already has a customer profile. A worker profile cannot be created.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     experience_years = models.PositiveIntegerField()
+
     location = models.CharField(max_length=100)
     bio = models.TextField()
     verified = models.BooleanField(default=False)
@@ -52,6 +65,16 @@ class CustomerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     location = models.CharField(max_length=100)
+
+    def clean(self):
+        # Enforce mutual exclusivity: a User must have only ONE profile (worker OR customer).
+        if WorkerProfile.objects.filter(user=self.user).exclude(pk=self.pk).exists():
+            raise ValidationError('This account already has a worker profile. A customer profile cannot be created.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
 
     preferred_contact = models.CharField(
         max_length=50,
