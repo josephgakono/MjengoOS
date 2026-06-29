@@ -330,8 +330,9 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
       # Only assigned worker can update project status
       if request.method in ['PUT', 'PATCH']:
         if (
-            obj.worker.user_id != request.user.id
+            obj.worker.user.username != request.user.username
             and not is_admin_user(request.user)
+
         ):
             raise PermissionDenied(
                 'Only the assigned worker can update project status.'
@@ -387,14 +388,19 @@ class PaymentListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Business rule: admins see all payments; customers see only payments for their projects.
+        # Business rule: admins see all payments; customers/workers see payments related to their work.
         user = self.request.user
         if is_admin_user(user):
             return Payment.objects.all()
-        return Payment.objects.filter(project__job__customer=user)
+        # Customers see payments for their projects; workers see payments for projects assigned to them.
+        # This supports both "payments sent" (customer initiates) and "payments received" (worker completes work).
+        return Payment.objects.filter(
+            Q(project__job__customer=user) | Q(project__worker__user=user)
+        )
 
     def perform_create(self, serializer):
         project = serializer.validated_data['project']
+
 
         # Business rule: workers cannot initiate payments and customers can only pay for their own projects.
         if project.job.customer.username != self.request.user.username and not is_admin_user(self.request.user):
@@ -414,7 +420,11 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
         user = self.request.user
         if is_admin_user(user):
             return Payment.objects.all()
-        return Payment.objects.filter(project__job__customer=user)
+        # Customers see payments for their projects; workers see payments for projects assigned to them.
+        return Payment.objects.filter(
+            Q(project__job__customer=user) | Q(project__worker__user=user)
+        )
+
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)
