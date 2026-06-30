@@ -55,6 +55,7 @@ from .serializers import (
     WorkerProfileSerializer,
     PublicUserSerializer,
     PublicJobSerializer,
+    UserSerializer,
     FeedbackSerializer,
 )
 
