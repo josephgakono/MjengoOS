@@ -136,6 +136,12 @@ class UserRegistrationView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+class MyProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 
 class JobListCreateView(generics.ListCreateAPIView):
     serializer_class = JobSerializer

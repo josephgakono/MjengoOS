@@ -29,6 +29,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'username',
+            "first_name",
+            "last_name",
             'email',
             'password',
             'user_type',
@@ -68,6 +70,20 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         return user
 
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "user_type",
+            "profile_picture",
+        ]
 
 class WorkerProfileSerializer(serializers.ModelSerializer):
     class Meta:
