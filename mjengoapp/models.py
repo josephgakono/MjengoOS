@@ -74,7 +74,19 @@ class WorkerProfile(models.Model):
 class CustomerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
 
+    # Denormalized fields for fast access by clients.
+    # These are kept in sync with User.* on save and during signup.
+    username = models.CharField(max_length=150, default='')
+    first_name = models.CharField(max_length=150, blank=True, default='')
+    last_name = models.CharField(max_length=150, blank=True, default='')
+
     location = models.CharField(max_length=100)
+
+    preferred_contact = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+    )
 
     def clean(self):
         # Enforce mutual exclusivity: a User must have only ONE profile (worker OR customer).
@@ -82,17 +94,17 @@ class CustomerProfile(models.Model):
             raise ValidationError('This account already has a worker profile. A customer profile cannot be created.')
 
     def save(self, *args, **kwargs):
+        # Keep denormalized fields synced with User.
+        if self.user_id:
+            self.username = self.user.username
+            self.first_name = self.user.first_name
+            self.last_name = self.user.last_name
         self.full_clean()
         return super().save(*args, **kwargs)
 
-
-    preferred_contact = models.CharField(
-        max_length=50,
-        blank=True
-    )
-
     def __str__(self):
         return self.user.username
+
 
 
 class Job(models.Model):
