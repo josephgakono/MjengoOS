@@ -91,14 +91,19 @@ def get_customer_profile(user):
 def visible_jobs_for_user(user):
     if is_admin_user(user):
         return Job.objects.all()
+
+    # Customer can only see jobs they created.
     if get_customer_profile(user):
         return Job.objects.filter(customer=user)
+
+    # Worker can only see jobs they have quoted for (pending/accepted quotes) or that are assigned.
+    # If their quotation was rejected, it should not grant visibility.
     if get_worker_profile(user):
-        return Job.objects.filter(
-            Q(status__in=['open', 'quoted'])
-            | Q(quotation__worker__user=user)
-            | Q(project__worker__user=user)
+        return (
+            Job.objects.filter(quotation__worker__user=user, quotation__status__in=['pending', 'accepted'])
+            | Job.objects.filter(project__worker__user=user)
         ).distinct()
+
     return Job.objects.none()
 
 
@@ -174,9 +179,15 @@ class JobDetailView(generics.RetrieveUpdateDestroyAPIView):
         return visible_jobs_for_user(self.request.user)
 
     def check_object_permissions(self, request, obj):
+        # Enforce visibility for all requests.
+        if not is_admin_user(request.user):
+            if not visible_jobs_for_user(request.user).filter(pk=obj.pk).exists():
+                raise PermissionDenied('You do not have access to this job.')
+
         super().check_object_permissions(request, obj)
         if request.method in SAFE_METHODS:
             return
+
 
         # Business rule: workers can view jobs but cannot edit them.
         if request.user.user_type == 'worker' and not is_admin_user(request.user):
