@@ -761,8 +761,8 @@ class ReviewListCreateView(generics.ListCreateAPIView):
                 raise PermissionDenied('Only the project owner can review this project.')
 
             # Serializer "worker" should match the assigned worker.
-            if worker.user_id != project.worker_id and not is_admin_user(author):
-                raise ValidationError('Reviews must target the assigned project worker.')
+            if worker.id != project.worker_id and not is_admin_user(author):
+               raise ValidationError('Reviews must target the assigned project worker.')
 
             serializer.save(project=project, customer=author, worker=project.worker)
             # Update combined rating for the reviewed worker profile (out of 5)
@@ -778,8 +778,8 @@ class ReviewListCreateView(generics.ListCreateAPIView):
             if project_worker.username != author.username and not is_admin_user(author):
                 raise PermissionDenied('Only the assigned worker can review this project.')
 
-            if worker.user_id != project.worker_id and not is_admin_user(author):
-                raise ValidationError('Reviews must target the assigned project worker.')
+            if worker.id != project.worker_id and not is_admin_user(author):
+              raise ValidationError('Reviews must target the assigned project worker.')
 
             # Only one review per author per project.
             if Review.objects.filter(project=project, customer=author).exists():
