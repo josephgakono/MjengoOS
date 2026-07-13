@@ -729,17 +729,18 @@ class ReviewListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Business rule: authors see reviews they created; admins see all.
-        user = self.request.user
-        if is_admin_user(user):
-            return Review.objects.all()
-        if user.user_type == 'customer':
-            return Review.objects.filter(customer=user)
-        if user.user_type == 'worker':
-            # worker reviews are stored with worker=<reviewed worker profile> and customer=<review author user>
-            # For worker's own authored reviews we filter by the "customer" field that holds the author.
-            return Review.objects.filter(customer=user)
-        return Review.objects.none()
+       user = self.request.user
+
+       if is_admin_user(user):
+        return Review.objects.all()
+
+       if user.user_type == "customer":
+        return Review.objects.filter(customer=user)
+
+       if user.user_type == "worker":
+        return Review.objects.filter(worker__user=user)
+
+       return Review.objects.none()
 
     def perform_create(self, serializer):
         project = serializer.validated_data['project']
