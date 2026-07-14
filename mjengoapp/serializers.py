@@ -101,10 +101,18 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
 
 
 class JobSerializer(serializers.ModelSerializer):
+    project_id = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Job
         fields = '__all__'
         read_only_fields = ['customer']
+
+    def get_project_id(self, obj):
+        # Project.job is a OneToOneField, so at most one project exists for a job.
+        project = getattr(obj, 'project', None)
+        return project.id if project else None
+
 
 
 class QuotationSerializer(serializers.ModelSerializer):
