@@ -25,8 +25,11 @@ class User(AbstractUser):
 
 class WorkerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-
-    profession = models.CharField(max_length=100)
+    profession = models.CharField(
+    max_length=100,
+    blank=True,
+    default=""
+    )
 
     def clean(self):
         # Enforce mutual exclusivity: a User must have only ONE profile (worker OR customer).
@@ -39,8 +42,16 @@ class WorkerProfile(models.Model):
 
     experience_years = models.PositiveIntegerField()
 
-    location = models.CharField(max_length=100)
-    bio = models.TextField()
+    location = models.CharField(
+    max_length=100,
+    blank=True,
+    default=""
+    )
+
+    bio = models.TextField(
+    blank=True,
+    default=""
+    )
     verified = models.BooleanField(default=False)
 
     hourly_rate = models.DecimalField(
@@ -80,7 +91,11 @@ class CustomerProfile(models.Model):
     first_name = models.CharField(max_length=150, blank=True, default='')
     last_name = models.CharField(max_length=150, blank=True, default='')
 
-    location = models.CharField(max_length=100)
+    location = models.CharField(
+    max_length=100,
+    blank=True,
+    default=""
+    )
 
     preferred_contact = models.CharField(
         max_length=50,
