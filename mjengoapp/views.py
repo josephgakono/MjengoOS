@@ -158,6 +158,19 @@ class MyProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    def retrieve(self, request, *args, **kwargs):
+        user = self.get_object()
+
+        worker_profile = get_worker_profile(user)
+        customer_profile = get_customer_profile(user)
+
+        data = UserSerializer(user).data
+
+        data['worker_profile_id'] = worker_profile.id if worker_profile else None
+        data['customer_profile_id'] = customer_profile.id if customer_profile else None
+
+        return Response(data)
+
 class JobListCreateView(generics.ListCreateAPIView):
     serializer_class = JobSerializer
     permission_classes = [IsAuthenticated]
